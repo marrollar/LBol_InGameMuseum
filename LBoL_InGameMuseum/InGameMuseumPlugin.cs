@@ -14,6 +14,9 @@ using LBoL.Presentation.UI;
 using LBoL.Presentation.UI.Panels;
 using LBoL.Presentation.UI.Widgets;
 using UnityEngine;
+using UnityEngine.Events;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 namespace LBoL_InGameMuseum
 {
@@ -23,7 +26,7 @@ namespace LBoL_InGameMuseum
     {
         private const string mod_guid = "lbol.ingamemusem";
         private const string mod_name = "LBoL InGameMuseum";
-        private const string mod_version = "1.0.0";
+        private const string mod_version = "0.1.0";
 
         private static readonly Harmony harmony = new Harmony(mod_guid);
 
@@ -31,23 +34,10 @@ namespace LBoL_InGameMuseum
 
         public static ConfigEntry<KeyboardShortcut> ShowMuseumKey;
 
-        private static InGameMuseumPlugin instance;
-        /*        private static MuseumPanel museum_panel;
-        */
-
-        private static MuseumPanel museum_panel;
-
         private void Awake()
         {
             log = Logger;
             log.LogInfo("InGameMuseum plugin awake");
-
-            instance = this;
-
-            /*Instantiate(museum_panel);*/
-
-            /*museum_panel = GameObject.Find("MuseumPanel");
-            log.LogInfo(museum_panel);*/
 
             ShowMuseumKey = Config.Bind("Keys", "ShowMuseumKey",
                 new KeyboardShortcut(KeyCode.P),
@@ -62,91 +52,55 @@ namespace LBoL_InGameMuseum
                 harmony.UnpatchSelf();
         }
 
+        private static void ShowMuseumPanel()
+        {
+            try
+            {
+                if (UiManager.GetPanel<MuseumPanel>().IsVisible)
+                {
+                    log.LogDebug("MuseumPanel toggle off");
+                    UiManager.Hide<MuseumPanel>();
+                }
+                else
+                {
+                    log.LogDebug("MuseumPanel toggle on");
+                    UiManager.Show<MuseumPanel>();
+                }
+
+            }
+            catch (InvalidOperationException e)
+            {
+                log.LogError(e);
+            }
+        }
+
         private void Update()
         {
             if (UiManager.Instance != null &&
                 ShowMuseumKey.Value.IsDown())
             {
-                log.LogInfo("Keybind pressed");
-
-                var museum_obj = GameObject.Find("UICamera/Canvas/Root/NormalLayer/MuseumPanel");
-                var top_layer_obj = GameObject.Find("UICamera/Canvas/Root/TopmostLayer");
-
-                if (museum_obj != null)
-                {
-                    log.LogInfo("Museum Obj found");
-                    museum_obj.transform.parent = top_layer_obj.transform;
-                } else
-                {
-                    log.LogInfo("Museum Obj not found");
-                }
-                
-                /*log.LogInfo(MainManuPanel_Patch.museum_panel);
-                log.LogInfo(UiManager.Instance._panelTable.ContainsKey(typeof(MuseumPanel)));*/
-
-                try
-                {
-                    if (UiManager.GetPanel<MuseumPanel>().IsVisible)
-                    {
-                        UiManager.Hide<MuseumPanel>();
-                    }
-                    else
-                    {
-                        /*UiManager.GetPanel<MuseumPanel>().Layer = PanelLayer.Top;*/
-                        UiManager.Show<MuseumPanel>();
-                    }
-
-                }
-                catch (InvalidOperationException e)
-                {
-                    log.LogError(e);
-                }
-
-                /*foreach (KeyValuePair<Type, UiPanelBase> entry in UiManager.Instance._panelTable)
-                {
-                    log.LogInfo($"{entry.Key}, {entry.Value}");
-                }*/
-
-
+                ShowMuseumPanel();
             }
         }
-
-        /*[HarmonyPatch(typeof(GameMaster), nameof(GameMaster.CoLoadGameRunUi))]
-        public static class MainManuPanel_Patch
-        {
-
-            public static async void Prefix()
-            {
-                *//*log.LogInfo("Prefix patch");
-                foreach (KeyValuePair<Type, UiPanelBase> entry in UiManager.Instance._panelTable)
-                {
-                    log.LogInfo($"{entry.Key}, {entry.Value}");
-                }*//*
-                
-            }
-            public static async void Postfix()
-            {
-                if (!UiManager.Instance._panelTable.ContainsKey(typeof(MuseumPanel)))
-                {
-                    GameMaster.GameRunUiList.Add(typeof(MuseumPanel));
-                    await UiManager.LoadPanelAsync<MuseumPanel>("GameRun", false);
-
-                }
-
-                foreach (Type t in GameMaster.GameRunUiList)
-                {
-                    log.LogInfo(t);
-                }
-
-            }
-        }*/
 
         [HarmonyPatch(typeof(GameMaster), nameof(GameMaster.UnloadMainMenuUi))]
         public static class GameMaster_UnloadMainMenuUi_Patch
         {
             public static void Prefix()
             {
+                // Patch to prevent MuseumPanel from being unloaded (thus inaccessible) when a new game run starts.
+                log.LogDebug("MuseumPanel removed before unload due to game start");
                 GameMaster.MainMenuUiList.Remove(typeof(MuseumPanel));
+            }
+
+            public static void Postfix()
+            {
+                // Patch to move the MuseumPanel above most render layers in the game to prevent
+                // unintentional player interaction with some UI elements while the museum is open.
+                log.LogDebug("MuseumPanel parentage moved to TopmostLayer");
+                var museum_obj = GameObject.Find("UICamera/Canvas/Root/NormalLayer/MuseumPanel");
+                var topmost_layer_obj = GameObject.Find("UICamera/Canvas/Root/TopmostLayer");
+                museum_obj.transform.parent = topmost_layer_obj.transform;
             }
         }
 
@@ -155,18 +109,46 @@ namespace LBoL_InGameMuseum
         {
             public static void Prefix()
             {
+                // Patch to return the MuseumPanel to its original layer when a game ends in one form or another.
+                // Mostly done to maybe fix a weird freeze issue where the game couldnt find the MuseumPanel after a game run.
+                // Also adds the MuseumPanel back into the list of panels to derender or else the game will try to recreate a MuseumPanel when entering the main menu and complain.
+                log.LogDebug("MuseumPanel parentage returned to NormalLayer");
+                var museum_obj = GameObject.Find("UICamera/Canvas/Root/TopmostLayer/MuseumPanel");
+                var normal_layer_obj = GameObject.Find("UICamera/Canvas/Root/NormalLayer");
+                museum_obj.transform.parent = normal_layer_obj.transform;
+
+                log.LogDebug("MuseumPanel added back to unload due to exiting to main menu");
                 GameMaster.GameRunUiList.Add(typeof(MuseumPanel));
             }
         }
 
-        [HarmonyPatch(typeof(MuseumPanel), nameof(MuseumPanel.Awake))]
-        public static class MuseumPanel_Awake_Patch
+        [HarmonyPatch(typeof(SystemBoard), nameof(SystemBoard.Awake))]
+        public static class SystemBoard_Awake_Patch
         {
-            public static void Postfix(MuseumPanel __instance)
+
+            public class ShowMuseumListener : MonoBehaviour, IPointerClickHandler
             {
-                museum_panel = __instance;
+
+                public UnityEvent rightClick;
+
+                public void OnPointerClick(PointerEventData eventData)
+                {
+                    if (eventData.button == PointerEventData.InputButton.Right)
+                    {
+                        log.LogDebug("Deck right clicked");
+                        ShowMuseumPanel();
+                    }
+                        
+                }
+            }
+
+            public static void Postfix(SystemBoard __instance)
+            {
+                // Patch to add functionality to clicking the deck button.
+                // Right click will open the museum.
+                log.LogDebug("Patching SystemBoard Deck button");
+                __instance.deckButton.gameObject.AddComponent<ShowMuseumListener>();
             }
         }
-
     }
 }
