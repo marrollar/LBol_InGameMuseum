@@ -37,40 +37,39 @@ namespace LBoL_InGameMuseum
         }
 
         [HarmonyPrefix]
-        [HarmonyPatch(nameof(GameMaster.UnloadMainMenuUi))]
+        [HarmonyPatch(nameof(GameMaster.CoSetupGameRun))]
         private static void Patch_RetainMuseumPanel()
         {
             // Patch to prevent MuseumPanel from being unloaded (thus inaccessible) when a new game run starts.
-            InGameMuseumPlugin.log.LogDebug("MuseumPanel removed before unload due to game start");
-            GameMaster.MainMenuUiList.Remove(typeof(MuseumPanel));
-        }
+            if (GameMaster.MainMenuUiList.Contains(typeof(MuseumPanel)))
+            {
+                InGameMuseumPlugin.log.LogDebug("MuseumPanel removed before unload due to game start");
+                GameMaster.MainMenuUiList.Remove(typeof(MuseumPanel));
 
-        [HarmonyPostfix]
-        [HarmonyPatch(nameof(GameMaster.UnloadMainMenuUi))]
-        private static void Patch_FixMuseumPanelLayer()
-        {
-            // Patch to move the MuseumPanel above most render layers in the game to prevent
-            // unintentional player interaction with some UI elements while the museum is open.
-            InGameMuseumPlugin.log.LogDebug("MuseumPanel parentage moved to TopmostLayer");
-            var museum_obj = GameObject.Find("UICamera/Canvas/Root/NormalLayer/MuseumPanel");
-            var topmost_layer_obj = GameObject.Find("UICamera/Canvas/Root/TopmostLayer");
-            museum_obj.transform.parent = topmost_layer_obj.transform;
+                // Also move MuseumPanel to be above most UI layers in the game.
+                InGameMuseumPlugin.log.LogDebug("MuseumPanel parentage moved to TopmostLayer");
+                var museum_obj = GameObject.Find("UICamera/Canvas/Root/NormalLayer/MuseumPanel");
+                var topmost_layer_obj = GameObject.Find("UICamera/Canvas/Root/TopmostLayer");
+                museum_obj.transform.SetParent(topmost_layer_obj.transform, false) ;
+            }
+
         }
 
         [HarmonyPrefix]
-        [HarmonyPatch(nameof(GameMaster.UnloadGameRunUi))]
-        private static void Patch_UnloadMuseumPanel()
+        [HarmonyPatch(nameof(GameMaster.CoLeaveGameRun))]
+        private static void Patch_RemoveMuseumPanel()
         {
-            // Patch to return the MuseumPanel to its original layer when a game ends in one form or another.
-            // Mostly done to maybe fix a weird freeze issue where the game couldnt find the MuseumPanel after a game run.
-            // Also adds the MuseumPanel back into the list of panels to derender or else the game will try to recreate a MuseumPanel when entering the main menu and complain.
-            InGameMuseumPlugin.log.LogDebug("MuseumPanel parentage returned to NormalLayer");
-            var museum_obj = GameObject.Find("UICamera/Canvas/Root/TopmostLayer/MuseumPanel");
-            var normal_layer_obj = GameObject.Find("UICamera/Canvas/Root/NormalLayer");
-            museum_obj.transform.parent = normal_layer_obj.transform;
-
-            InGameMuseumPlugin.log.LogDebug("MuseumPanel added back to unload due to exiting to main menu");
-            GameMaster.GameRunUiList.Add(typeof(MuseumPanel));
+            // Patch to unload MuseumPanel before main menu is hit.
+            // Main menu will attempt to reload a MuseumPanel, which it will complain about if there is already one that exists.
+            try
+            {
+                InGameMuseumPlugin.log.LogDebug("MuseumPanel unloaded successfully");
+                UiManager.UnloadPanel<MuseumPanel>();
+            }
+            catch (InvalidOperationException e)
+            {
+                InGameMuseumPlugin.log.LogDebug("MuseumPanel not found during unload attempt");
+            }
         }
     }
 }

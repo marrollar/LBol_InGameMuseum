@@ -3,4 +3,5 @@ bin/
 packages/
 obj/
 properties/
-thunderstore/
+releases/
+*.zip

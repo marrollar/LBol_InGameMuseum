@@ -32,8 +32,13 @@ namespace LBoL_InGameMuseum
         {
             // Patch to add functionality to clicking the deck button.
             // Right click will open the museum.
-            InGameMuseumPlugin.log.LogDebug("Patching SystemBoard Deck button");
-            __instance.deckButton.gameObject.AddComponent<ShowMuseumListener>();
+            var deckbuttonGO = __instance.deckButton.gameObject;
+            if (deckbuttonGO.GetComponent<ShowMuseumListener>() == null)
+            {
+                InGameMuseumPlugin.log.LogDebug("Adding right click only listener to SystemBoard's Deck button");
+                deckbuttonGO.AddComponent<ShowMuseumListener>();
+            }
+            
         }
     }
 }
