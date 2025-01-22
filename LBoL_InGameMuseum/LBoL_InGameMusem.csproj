@@ -80,6 +80,7 @@
     <Compile Include="DeckButtonPatches.cs" />
     <Compile Include="MuseumPanelPatches.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="WatermarkWrapper.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

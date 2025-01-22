@@ -40,6 +40,9 @@ namespace LBoL_InGameMuseum
             log = Logger;
             log.LogInfo("InGameMuseum plugin awake");
 
+            if (BepInEx.Bootstrap.Chainloader.PluginInfos.ContainsKey(AddWatermark.API.GUID))
+                WatermarkWrapper.ActivateWatermark();
+
             ShowMuseumKey = Config.Bind("Keys", "ShowMuseumKey",
                 new KeyboardShortcut(KeyCode.P),
                 new ConfigDescription("Shows Museum"));
